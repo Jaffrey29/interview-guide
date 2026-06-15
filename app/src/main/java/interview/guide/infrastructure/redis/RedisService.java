@@ -13,6 +13,7 @@ import org.redisson.api.RMap;
 import org.redisson.api.RStream;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.options.KeysScanOptions;
+import org.redisson.api.stream.AutoClaimResult;
 import org.redisson.api.stream.StreamAddArgs;
 import org.redisson.api.stream.StreamCreateGroupArgs;
 import org.redisson.api.stream.StreamMessageId;
@@ -263,6 +264,46 @@ public class RedisService {
         }
 
         return true;
+    }
+
+    /**
+     * 回收 Consumer Group 中 idle 超时的 pending 消息，并返回下一次扫描游标。
+     */
+    public StreamMessageId streamAutoClaimMessagesWithCursor(
+            String streamKey,
+            String groupName,
+            String consumerName,
+            StreamMessageId startId,
+            long idleTimeoutMs,
+            int count,
+            StreamMessageProcessor processor) {
+
+        RStream<String, String> stream = redissonClient.getStream(streamKey, StringCodec.INSTANCE);
+        StreamMessageId claimStartId = startId != null ? startId : StreamMessageId.MIN;
+
+        AutoClaimResult<String, String> result;
+        try {
+            result = stream.autoClaim(
+                groupName,
+                consumerName,
+                idleTimeoutMs,
+                TimeUnit.MILLISECONDS,
+                claimStartId,
+                count
+            );
+        } catch (ClassCastException e) {
+            return claimStartId;
+        }
+
+        Map<StreamMessageId, Map<String, String>> messages = result.getMessages();
+        if (messages != null && !messages.isEmpty()) {
+            for (Map.Entry<StreamMessageId, Map<String, String>> entry : messages.entrySet()) {
+                processor.process(entry.getKey(), entry.getValue());
+            }
+        }
+
+        StreamMessageId nextId = result.getNextId();
+        return nextId != null ? nextId : claimStartId;
     }
 
     /**

@@ -22,6 +22,7 @@ public abstract class AbstractStreamConsumer<T> {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private ExecutorService executorService;
     private String consumerName;
+    private StreamMessageId pendingClaimCursor = StreamMessageId.MIN;
 
     protected AbstractStreamConsumer(RedisService redisService) {
         this.redisService = redisService;
@@ -72,6 +73,16 @@ public abstract class AbstractStreamConsumer<T> {
     private void consumeLoop() {
         while (running.get()) {
             try {
+                pendingClaimCursor = redisService.streamAutoClaimMessagesWithCursor(
+                    streamKey(),
+                    groupName(),
+                    consumerName,
+                    pendingClaimCursor,
+                    AsyncTaskStreamConstants.PENDING_IDLE_TIMEOUT_MS,
+                    AsyncTaskStreamConstants.PENDING_CLAIM_BATCH_SIZE,
+                    this::processMessage
+                );
+
                 redisService.streamConsumeMessages(
                     streamKey(),
                     groupName(),
@@ -102,6 +113,11 @@ public abstract class AbstractStreamConsumer<T> {
             taskDisplayName(), payloadIdentifier(payload), messageId, retryCount);
 
         try {
+            if (shouldSkip(payload)) {
+                ackMessage(messageId);
+                log.info("{} task skipped: {}", taskDisplayName(), payloadIdentifier(payload));
+                return;
+            }
             markProcessing(payload);
             processBusiness(payload);
             markCompleted(payload);
@@ -160,6 +176,10 @@ public abstract class AbstractStreamConsumer<T> {
     protected abstract T parsePayload(StreamMessageId messageId, Map<String, String> data);
 
     protected abstract String payloadIdentifier(T payload);
+
+    protected boolean shouldSkip(T payload) {
+        return false;
+    }
 
     protected abstract void markProcessing(T payload);
 

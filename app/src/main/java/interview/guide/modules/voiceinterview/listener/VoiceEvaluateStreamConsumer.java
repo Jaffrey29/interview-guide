@@ -4,6 +4,7 @@ import interview.guide.common.async.AbstractStreamConsumer;
 import interview.guide.common.constant.AsyncTaskStreamConstants;
 import interview.guide.common.model.AsyncTaskStatus;
 import interview.guide.infrastructure.redis.RedisService;
+import interview.guide.modules.voiceinterview.repository.VoiceInterviewSessionRepository;
 import interview.guide.modules.voiceinterview.service.VoiceInterviewEvaluationService;
 import interview.guide.modules.voiceinterview.service.VoiceInterviewService;
 import lombok.extern.slf4j.Slf4j;
@@ -21,13 +22,16 @@ public class VoiceEvaluateStreamConsumer extends AbstractStreamConsumer<VoiceEva
 
     private final VoiceInterviewService voiceInterviewService;
     private final VoiceInterviewEvaluationService evaluationService;
+    private final VoiceInterviewSessionRepository sessionRepository;
 
     public VoiceEvaluateStreamConsumer(RedisService redisService,
                                        VoiceInterviewService voiceInterviewService,
-                                       VoiceInterviewEvaluationService evaluationService) {
+                                       VoiceInterviewEvaluationService evaluationService,
+                                       VoiceInterviewSessionRepository sessionRepository) {
         super(redisService);
         this.voiceInterviewService = voiceInterviewService;
         this.evaluationService = evaluationService;
+        this.sessionRepository = sessionRepository;
     }
 
     record VoiceEvaluatePayload(String sessionId) {}
@@ -70,6 +74,13 @@ public class VoiceEvaluateStreamConsumer extends AbstractStreamConsumer<VoiceEva
     @Override
     protected String payloadIdentifier(VoiceEvaluatePayload payload) {
         return "voiceSessionId=" + payload.sessionId();
+    }
+
+    @Override
+    protected boolean shouldSkip(VoiceEvaluatePayload payload) {
+        return sessionRepository.findById(Long.parseLong(payload.sessionId()))
+            .map(session -> session.getEvaluateStatus() == AsyncTaskStatus.COMPLETED)
+            .orElse(true);
     }
 
     @Override
