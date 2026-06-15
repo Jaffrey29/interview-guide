@@ -79,6 +79,13 @@ public class VoiceEvaluateStreamConsumer extends AbstractStreamConsumer<VoiceEva
     }
 
     @Override
+    protected boolean shouldSkip(VoiceEvaluatePayload payload) {
+        return sessionRepository.findById(payload.sessionId())
+            .map(session -> session.getEvaluateStatus() == AsyncTaskStatus.COMPLETED)
+            .orElse(true);
+    }
+
+    @Override
     protected void markProcessing(VoiceEvaluatePayload payload) {
         voiceInterviewService.updateEvaluateStatus(
                 payload.sessionId(), AsyncTaskStatus.PROCESSING, null);

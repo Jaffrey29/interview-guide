@@ -18,8 +18,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public abstract class AbstractStreamConsumer<T> {
 
-    private static final long PENDING_IDLE_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(30);
-
     private final RedisService redisService;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private ExecutorService executorService;
@@ -80,7 +78,8 @@ public abstract class AbstractStreamConsumer<T> {
                     consumerName,
                     AsyncTaskStreamConstants.BATCH_SIZE,
                     AsyncTaskStreamConstants.POLL_INTERVAL_MS,
-                    PENDING_IDLE_TIMEOUT_MS,
+                    AsyncTaskStreamConstants.PENDING_IDLE_TIMEOUT_MS,
+                    AsyncTaskStreamConstants.PENDING_CLAIM_BATCH_SIZE,
                     this::processMessage
                 );
             } catch (Exception e) {
@@ -115,6 +114,11 @@ public abstract class AbstractStreamConsumer<T> {
             taskDisplayName(), payloadIdentifier(payload), messageId, retryCount);
 
         try {
+            if (shouldSkip(payload)) {
+                ackMessage(messageId);
+                log.info("{} task skipped: {}", taskDisplayName(), payloadIdentifier(payload));
+                return;
+            }
             markProcessing(payload);
             processBusiness(payload);
             markCompleted(payload);
@@ -176,6 +180,10 @@ public abstract class AbstractStreamConsumer<T> {
     protected abstract T parsePayload(StreamMessageId messageId, Map<String, String> data);
 
     protected abstract String payloadIdentifier(T payload);
+
+    protected boolean shouldSkip(T payload) {
+        return false;
+    }
 
     protected abstract void markProcessing(T payload);
 

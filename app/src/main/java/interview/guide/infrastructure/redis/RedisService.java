@@ -270,6 +270,40 @@ public class RedisService {
             long blockTimeoutMs,
             long pendingIdleTimeoutMs,
             StreamMessageProcessor processor) {
+        return streamConsumeMessages(
+            streamKey,
+            groupName,
+            consumerName,
+            count,
+            blockTimeoutMs,
+            pendingIdleTimeoutMs,
+            count,
+            processor
+        );
+    }
+
+    /**
+     * 消费 Stream 消息（优先回收超时 Pending，再阻塞读取新消息）
+     *
+     * @param streamKey              Stream 键
+     * @param groupName              消费者组名
+     * @param consumerName           消费者名
+     * @param count                  每次读取新消息数量
+     * @param blockTimeoutMs         阻塞等待超时时间（毫秒），0 表示无限等待
+     * @param pendingIdleTimeoutMs   Pending 消息超过该 idle 时间后可被当前消费者回收
+     * @param pendingClaimBatchSize  每轮最多回收的 Pending 消息数
+     * @param processor              消息处理器
+     * @return true 如果处理了消息，false 如果超时无消息
+     */
+    public boolean streamConsumeMessages(
+            String streamKey,
+            String groupName,
+            String consumerName,
+            int count,
+            long blockTimeoutMs,
+            long pendingIdleTimeoutMs,
+            int pendingClaimBatchSize,
+            StreamMessageProcessor processor) {
 
         RStream<String, String> stream = redissonClient.getStream(streamKey, StringCodec.INSTANCE);
         Map<StreamMessageId, Map<String, String>> messages = reclaimPendingMessages(
@@ -277,7 +311,7 @@ public class RedisService {
             streamKey,
             groupName,
             consumerName,
-            count,
+            pendingClaimBatchSize,
             pendingIdleTimeoutMs
         );
         if (processMessages(messages, processor)) {
