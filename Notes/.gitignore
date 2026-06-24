@@ -1,0 +1,14 @@
+# Obsidian 本地状态（每台机器不同，不必同步）
+.obsidian/workspace*
+.obsidian/cache
+
+# OS / 编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 临时文件
+*.tmp
+*.swp
+*~
